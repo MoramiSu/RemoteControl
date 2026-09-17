@@ -17,6 +17,14 @@ foreach($folder in @('src','test','docs')){
  }
 }
 $scripts=Join-Path $destination 'scripts'
+$imagesSource=Join-Path $root 'docs\images'
+if(Test-Path -LiteralPath $imagesSource){
+ $imagesTarget=Join-Path $destination 'docs\images'
+ New-Item -ItemType Directory -Path $imagesTarget -Force | Out-Null
+ foreach($file in Get-ChildItem -LiteralPath $imagesSource -File){
+  if($file.Extension -in @('.png','.svg')){Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $imagesTarget $file.Name)}
+ }
+}
 New-Item -ItemType Directory -Path $scripts | Out-Null
 foreach($file in @('runtime.ps1','prepare.ps1','setup-desktop.mjs','configure.ps1','start.ps1','setup-and-start.ps1','install-startup.ps1','discover-desktop.ps1','check-desktop.mjs','enable-desktop.ps1','export-source.ps1')){
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $scripts $file)
