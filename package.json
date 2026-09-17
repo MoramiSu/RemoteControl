@@ -1,0 +1,19 @@
+{
+  "name": "remotecontrol",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Feishu bridge for existing Codex desktop tasks on Windows",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "1.73.3",
+    "marked": "18.0.12",
+    "mermaid": "11.17.2",
+    "puppeteer-core": "25.10.0"
+  }
+}

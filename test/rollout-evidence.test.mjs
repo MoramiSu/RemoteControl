@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mergeRolloutItems} from '../src/rollout-evidence.mjs';
+const page=()=>({thread:{id:'target'},turns:[{id:'turn',status:'completed',items:[]}]});
+const item={type:'AgentMessage',id:'answer',phase:'final_answer',content:[{type:'Text',text:'回复原文'}]};
+const event=(thread_id='target',turn_id='turn')=>({type:'event_msg',payload:{type:'item_completed',thread_id,turn_id,item}});
+const jsonl=(events,id='target')=>[JSON.stringify({type:'session_meta',payload:{id}}),...events.map(x=>JSON.stringify(x))].join('\n')+'\n';
+test('fills empty API item projection only from matching completed item events',()=>{const r=mergeRolloutItems(page(),jsonl([event()]));assert.equal(r.turns[0].items[0].text,'回复原文')});
+test('wrong session rejected and unrelated thread or turn ignored',()=>{assert.throws(()=>mergeRolloutItems(page(),jsonl([event()],'wrong')));assert.equal(mergeRolloutItems(page(),jsonl([event('other'),event('target','other')])).turns[0].items.length,0)});
+test('partial final line ignored without accepting malformed middle records',()=>{assert.equal(mergeRolloutItems(page(),jsonl([event()])+'{"type":').turns[0].items.length,1);assert.throws(()=>mergeRolloutItems(page(),jsonl([])+'bad\n{}\n'))});
+test('conflicting API and persisted text stops verification',()=>{const p=page();p.turns[0].items=[{type:'agentMessage',id:'answer',text:'different'}];assert.throws(()=>mergeRolloutItems(p,jsonl([event()]))) });

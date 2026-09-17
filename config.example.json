@@ -1,0 +1,7 @@
+{
+  "appId": "cli_REPLACE_ME",
+  "sourceThreadId": "00000000-0000-4000-8000-000000000001",
+  "targetThreadId": "00000000-0000-4000-8000-000000000002",
+  "targetTitle": "RemoteControl 测试",
+  "mode": "receive-only"
+}

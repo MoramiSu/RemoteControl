@@ -1,0 +1,27 @@
+node_modules/
+.private/
+runtime/
+dist/
+.staging/
+.env
+.env.*
+!.env.example
+config.local.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+*.zip
+.remotecontrol-inbox/
+# Local history and one-off probes are not distribution source.
+CURRENT.md
+PHASE0.md
+QUESTION_VALIDATION.md
+phase0-*
+probe.mjs
+send-phase0-test.mjs
+scripts/verify-*
+scripts/*-demo.mjs
+scripts/*-uia.ps1
+
+.runtime/
