@@ -18,7 +18,7 @@ export class ProjectWorker{
   const save=(kind,items)=>db.prepare('INSERT INTO project_lists VALUES(?,?,?,?,?) ON CONFLICT(tenant,chat,kind) DO UPDATE SET items=excluded.items,expires=excluded.expires').run(tenant,chat,kind,JSON.stringify(items),now+300000);
   const pick=(kind,n)=>{const list=db.prepare('SELECT * FROM project_lists WHERE tenant=? AND chat=? AND kind=?').get(tenant,chat,kind);if(!list||now>=list.expires)throw Error('列表已过期，请重新列出后选择。');const item=JSON.parse(list.items)[n-1];if(!item)throw Error('编号无效，请按最新列表选择。');return item;};
   const unchanged=()=>{if(selectionRevision(this.store,tenant,chat)!==row.revision)throw Error('选择已变化，本条操作未生效，请重新发送。');};
-  let body;
+  let body;let failed=false;
   try{
    unchanged();const current=selectedProject(this.store,tenant,chat);
    if(row.command==='projects'){
@@ -47,8 +47,8 @@ export class ProjectWorker{
      if(destination)db.prepare('INSERT INTO project_choices VALUES(?,?,?,0) ON CONFLICT(tenant,chat) DO UPDATE SET project_json=excluded.project_json,needs_task=0').run(tenant,chat,JSON.stringify(destination));else db.prepare('DELETE FROM project_choices WHERE tenant=? AND chat=?').run(tenant,chat);
      db.prepare('DELETE FROM global_selection_pending WHERE tenant=? AND chat=?').run(tenant,chat);bumpSelection(this.store,tenant,chat);});body=`已切换到「${choice.title}」。`;
    }
-  }catch(e){body=/^(列表|编号|选择|用法|项目|任务|请先)/.test(e.message)?e.message:'项目操作失败，请确认桌面连接后重试。';}finally{this.client.close();}
-  this.store.transaction(()=>{db.prepare('INSERT OR IGNORE INTO outbox(inbox_id,dedup_key,body) VALUES(?,?,?)').run(row.inbox_id,`project:${row.inbox_id}`,body??'操作未执行。');db.prepare('UPDATE project_commands SET done=1 WHERE inbox_id=?').run(row.inbox_id);});
+  }catch(e){failed=true;body=/^(列表|编号|选择|用法|项目|任务|请先)/.test(e.message)?e.message:'项目操作失败，请确认桌面连接后重试。';}finally{if(failed)this.client.close();}
+  this.store.transaction(()=>{db.prepare('INSERT OR IGNORE INTO outbox(inbox_id,dedup_key,body) VALUES(?,?,?)').run(row.inbox_id,`project:${row.inbox_id}`,body??'操作未执行。');db.prepare('UPDATE project_commands SET done=1 WHERE inbox_id=?').run(row.inbox_id);});return true;
  }
 }
 

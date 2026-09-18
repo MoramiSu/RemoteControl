@@ -30,6 +30,27 @@ test('short mixed replies stay together and whitespace-only source creates no bl
   const text='Intro\n\n```js\ncode\n```\n\n```mermaid\nflowchart LR\nA-->B\n```\n\nEnd';
   assert.deepEqual(splitReplySource(text),[text]);assert.deepEqual(await buildReplyPlan('\r\n\n','任务'),[]);
 });
+
+test('a full mixed outcome over 2000 characters sends as one card',async t=>{
+ const {store,id}=setup(t);
+ const text='说明'.repeat(1300)+'\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```mermaid\nflowchart LR\nA --> B\n```\n\n结束。';
+ store.recordOutcome(id,'turn','completed',text);
+ assert.equal(store.pendingReplies().length,1);
+ const sent=[];const sender=new ReplySender(store,client(async r=>{sent.push(r.data);return {code:0,data:{message_id:'ok'}}}),{...options,render:async()=>Buffer.from('png')});
+ assert.equal(await sender.tick(),true);assert.equal(sent.length,1);
+ const elements=JSON.parse(sent[0].content).body.elements;
+ assert.ok(elements.some(e=>e.tag==='table'));assert.ok(elements.some(e=>e.tag==='img'));
+ assert.match(elements.at(-1).content,/结束/);
+});
+
+test('table row groups share the surrounding card while preserving every row',async()=>{
+ const rows=Array.from({length:25},(_,i)=>`| row${i} | value |`).join('\n');
+ const plan=await buildReplyPlan('开头\n\n| A | B |\n| --- | --- |\n'+rows+'\n\n结尾','任务');
+ assert.equal(plan.length,1);
+ const elements=JSON.parse(plan[0].content).body.elements;
+ assert.equal(elements.filter(e=>e.tag==='table').flatMap(e=>e.rows).length,25);
+ assert.match(elements[0].content,/开头/);assert.match(elements.at(-1).content,/结尾/);
+});
 test('replaying a pre-upgrade outcome does not add chunks using the new boundaries',t=>{
   const {store,id}=setup(t);const text='before\n```mermaid\n'+'A --> B\n'.repeat(300)+'```\nafter';const chars=Array.from(text);
   for(let i=0;i<chars.length;i+=2000)store.db.prepare('INSERT INTO outbox(inbox_id,dedup_key,body) VALUES(?,?,?)').run(id,i===0?`outcome:${id}:turn`:`outcome:${id}:turn:part:${i}`,chars.slice(i,i+2000).join(''));

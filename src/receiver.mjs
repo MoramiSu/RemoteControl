@@ -1,3 +1,5 @@
+import {WakeSignal} from './wake-signal.mjs';
+import {runWakeLoop} from './wake-loop.mjs';
 import {ProjectWorker} from './projects.mjs';
 import {validateDesktopConfig} from './desktop-config.mjs';
 import {UsageWorker} from './usage.mjs';
@@ -60,34 +62,36 @@ const incoming=worker?new IncomingWorker(store,client,{instanceId,contextFor:asy
 }}):null;
 const usage=new UsageWorker(store,async()=>{const adapter=new DesktopAdapter();try{return await adapter.call('get_usage_limits',{});}finally{adapter.close();}});
 const projectWorker=new ProjectWorker(store,new DesktopAdapter());
+const projectSignal=new WakeSignal(),replySignal=new WakeSignal();
+let lastOutboxId=store.db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM outbox').get().id;
+function wakeReplies(){const id=store.db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM outbox').get().id;if(id!==lastOutboxId){lastOutboxId=id;replySignal.wake();}}
 let ws,stopping=false,received=0,replies=0,sendFailures=0;
 function saveStatus() {binding=store.db.prepare('SELECT * FROM bindings LIMIT 1').get();writeFileSync(new URL('status.json',privateUrl),JSON.stringify({updatedAt:new Date().toISOString(),mode:config.mode,desktop:worker?.stateFor(binding?.target_id)??'disabled',connection:ws?.getConnectionStatus().state??'starting',paired:!!binding,received,replies,sendFailures,targetThreadId:binding?.target_id??config.targetThreadId}));}
 const service=new ReceiveService(store,{appId:config.appId,targetThreadId:config.targetThreadId,pairCode,expiresAt:pairExpires,mode:config.mode,getRuntime:(id)=>({desktop:worker?.stateFor(id),connection:ws?.getConnectionStatus().state})});
 function receive(data) {
   const result=service.accept(data);binding=service.binding;
-  if(result.accepted && !result.duplicate) {received++;console.log('Authorized message persisted.');}
+  if(result.accepted && !result.duplicate) {received++;projectSignal.wake();wakeReplies();console.log('Authorized message persisted.');}
 }ws=new lark.WSClient({appId:config.appId,appSecret:secret,domain:lark.Domain.Feishu,logger:silentLogger,onReady(){console.log('Feishu long connection ready.');},onReconnecting(){console.log('Feishu reconnecting.');},onReconnected(){console.log('Feishu reconnected.');},onError(){console.error('Feishu connection failed. Check local credentials and app settings.');}});
 const sender=new ReplySender(store,client,{appId:config.appId,instanceId,titleFor:id=>allowedTasks(store).get(id)??id});
-async function pump() {
-  while(!stopping) {
-    try {
-      if(await sender.tick())replies++;
-      saveStatus();
-    } catch {sendFailures++;console.error('Local receipt or reply failed; pending record retained.');}
-    await new Promise(r=>setTimeout(r,1000));
-  }
-}
-async function work(){while(!stopping){try{if(worker)await worker.tick();}catch{console.error('Task worker failed; pending messages retained.');}await new Promise(r=>setTimeout(r,1500));}}
-async function createWork(){while(!stopping){try{await creator?.tick();}catch{console.error('Creation verification pending; no automatic recreation.');creationAdapter?.close();}await new Promise(r=>setTimeout(r,1500));}}
-async function incomingWork(){while(!stopping){try{await incoming?.tick();}catch{console.error('Attachment preparation pending; persisted record retained.');}await new Promise(r=>setTimeout(r,1500));}}
-async function usageWork(){while(!stopping){try{await usage.tick();}catch{console.error('Usage query pending.');}await new Promise(r=>setTimeout(r,1000));}}
-async function projectWork(){while(!stopping){try{await projectWorker.tick();}catch{console.error('Project operation pending.');}await new Promise(r=>setTimeout(r,1000));}}
-for(const event of ['SIGINT','SIGTERM'])process.on(event,()=>{stopping=true;ws.close();});
+function pump(){return runWakeLoop({signal:replySignal,stopped:()=>stopping,
+  tick:async()=>{try{if(await sender.tick())replies++;}finally{saveStatus();}},
+  cooldown:()=>sender.lastTickHadWork?1000:0,
+  onError:()=>{sendFailures++;console.error('Local receipt or reply failed; pending record retained.');}
+});}
+async function work(){while(!stopping){try{if(worker)await worker.tick();}catch{console.error('Task worker failed; pending messages retained.');}wakeReplies();await new Promise(r=>setTimeout(r,1500));}}
+async function createWork(){while(!stopping){try{await creator?.tick();}catch{console.error('Creation verification pending; no automatic recreation.');creationAdapter?.close();}wakeReplies();await new Promise(r=>setTimeout(r,1500));}}
+async function incomingWork(){while(!stopping){try{await incoming?.tick();}catch{console.error('Attachment preparation pending; persisted record retained.');}wakeReplies();await new Promise(r=>setTimeout(r,1500));}}
+async function usageWork(){while(!stopping){try{await usage.tick();}catch{console.error('Usage query pending.');}wakeReplies();await new Promise(r=>setTimeout(r,1000));}}
+function projectWork(){return runWakeLoop({signal:projectSignal,stopped:()=>stopping,
+  tick:async()=>{try{return await projectWorker.tick();}finally{wakeReplies();}},
+  onError:()=>console.error('Project operation pending.')
+});}
+for(const event of ['SIGINT','SIGTERM'])process.on(event,()=>{stopping=true;projectSignal.wake();replySignal.wake();ws.close();});
 try {
   const dispatcher=new lark.EventDispatcher({logger:silentLogger}).register({'im.message.receive_v1':receive});
   await ws.start({eventDispatcher:dispatcher});
   await Promise.all([pump(),work(),createWork(),incomingWork(),usageWork(),projectWork()]);
-} finally {ws.close();worker?.close();creationAdapter?.close();store.close();lock.close();}
+} finally {ws.close();worker?.close();creationAdapter?.close();projectWorker.client.close();store.close();lock.close();}
 
 
 

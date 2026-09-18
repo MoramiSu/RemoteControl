@@ -8,21 +8,9 @@ export function textChunks(text, limit=2000) {
 
 // Keep source bytes and fenced diagrams intact; transport applies its own size limits.
 export function splitReplySource(text) {
-  const lines=text.match(/[^\n]*\n|[^\n]+$/g)??[''];
-  const result=[];let buffer='',fence=null,table=false;
-  const flush=()=>{if(buffer){result.push(buffer);buffer='';}};
-  for(let index=0;index<lines.length;index++){
-    const line=lines[index];
-    if(!fence&&!table&&line.includes('|')&&/^\s*\|?\s*:?-{3,}:?\s*\|/.test(lines[index+1]??'')){flush();table=true;}
-    if(table){if(line.includes('|')){buffer+=line;continue;}flush();table=false;}
-    const opener=!fence&&line.match(/^ {0,3}(`{3,}|~{3,})([^\r\n]*)/);
-    if(opener){flush();fence={char:opener[1][0],length:opener[1].length};buffer=line;continue;}
-    if(fence){buffer+=line;if(new RegExp('^ {0,3}'+fence.char+'{'+fence.length+',}\\s*$').test(line)){flush();fence=null;}continue;}
-    if(Array.from(buffer+line).length>2000){flush();const parts=textChunks(line);buffer=parts.pop();result.push(...parts);}else buffer+=line;
-  }
-  flush();const packed=[];
-  for(const part of result){const last=packed.length-1;if(last>=0&&Array.from(packed[last]+part).length<=2000)packed[last]+=part;else packed.push(part);}
-  return packed.length?packed:[''];
+  // Persist the complete outcome. Only the transport planner decides card boundaries.
+  // Existing outbox chunks are preserved by recordOutcome's replay check.
+  return [text];
 }
 
 // Feishu-specific HTML can mention users or embed remote resources. Display it literally.
@@ -70,7 +58,7 @@ export async function buildReplyPlan(text,title,{render,upload}={}){
       for(let i=0;i<token.rows.length;i+=10){
         const rows=token.rows.slice(i,i+10);
         const fallback=[token.header,...rows].map(row=>row.map(cell=>cell.text).join(' | ')).join('\n');
-        flush();append({tag:'table',page_size:10,columns,rows:rows.map(row=>Object.fromEntries(row.map((cell,j)=>[`c${j}`,cell.text])))},fallback);flush();
+        append({tag:'table',page_size:10,columns,rows:rows.map(row=>Object.fromEntries(row.map((cell,j)=>[`c${j}`,cell.text])))},fallback);
       }
       if(!token.rows.length)append(md(raw),raw);
     }else{

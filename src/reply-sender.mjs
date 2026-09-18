@@ -46,6 +46,7 @@ export class ReplySender {
     });
   }
   async tick(){
+    this.lastTickHadWork=false;
     const db=this.store.db,now=this.now();
     // An expired ambiguous reply must not block every later receipt in the chat.
     const blocked=new Set();
@@ -57,6 +58,7 @@ export class ReplySender {
       if(!ready)blocked.add(row.inbox_id);return ready;
     });
     if(!row)return false;
+    this.lastTickHadWork=true;
     await this.prepare(row);
     const p=db.prepare("SELECT * FROM reply_payloads WHERE outbox_id=? AND status='pending' ORDER BY part LIMIT 1").get(row.id);
     if(p){

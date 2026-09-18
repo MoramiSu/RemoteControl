@@ -4,6 +4,17 @@ import {globalSelectionPending} from '../src/projects.mjs';
 import {BridgeStore} from '../src/store.ts';import {ReceiveService} from '../src/receive-service.mjs';import {ProjectWorker,selectedProject} from '../src/projects.mjs';import {allowedTasks,TEST_TARGET} from '../src/targets.mjs';import {CreationAdapter} from '../src/creation-adapter.mjs';import {CreationWorker} from '../src/creation-worker.mjs';
 const p={projectId:'p',projectKind:'local',hostId:'local',label:'项目',path:'D:\\example',isGitRepository:true};
 const task={id:'11111111-2222-4333-8444-555555555555',title:'项目任务',kind:'codex',hostId:'local',projectId:'p',status:{type:'idle'}};
+test('successful commands reuse a connection; failure closes without replay and next command reconnects',async t=>{
+ const f=setup(t);const original=f.client.call;let connected=false,connections=0,closes=0,calls=0,fail=false;
+ f.client.call=async(...args)=>{calls++;if(!connected){connected=true;connections++;}if(fail)throw Error('simulated disconnect');return original(...args);};
+ f.client.close=()=>{connected=false;closes++;};
+ f.send('/rc projects','one');await f.worker.tick(1001);f.send('/rc tasks','two');await f.worker.tick(1002);
+ assert.equal(connections,1);assert.equal(closes,0);
+ fail=true;f.send('/rc projects','broken');await f.worker.tick(1003);assert.equal(closes,1);const before=calls;
+ await f.worker.tick(1004);assert.equal(calls,before);assert.equal(f.send('/rc projects','broken').duplicate,true);
+ fail=false;f.send('/rc projects','new');await f.worker.tick(1005);assert.equal(connections,2);
+ assert.equal(f.store.db.prepare('SELECT count(*) AS n FROM project_commands WHERE done=0').get().n,0);
+});
 function setup(t){const store=new BridgeStore(':memory:');t.after(()=>store.close());store.bind('t','c','u',TEST_TARGET);const service=new ReceiveService(store,{appId:'app',targetThreadId:TEST_TARGET,mode:'desktop-test'});let seq=0;const send=(text,id=String(++seq),user='u')=>service.accept({app_id:'app',sender:{sender_type:'user',tenant_key:'t',sender_id:{open_id:user}},message:{message_id:id,chat_id:'c',chat_type:'p2p',message_type:'text',content:JSON.stringify({text})}},1000);const client={call:async name=>name==='list_projects'?{projects:[p,{...p,projectId:'remote',hostId:'other'}]}:name==='list_threads'?{threads:[task,{...task,id:'chat',kind:'chatgpt'},{...task,id:'wrong',projectId:'other'}]}:{thread:task},close(){}};const worker=new ProjectWorker(store,client);return {store,send,client,worker};}
 test('removed aliases cannot switch scope or become task messages',async t=>{
  const f=setup(t);f.send('/rc projects');await f.worker.tick(1001);f.send('/rc project 1');await f.worker.tick(1002);
