@@ -38,7 +38,7 @@ export class ReceiveService {
         if(command==='resume' && this.mode==='desktop-test'){this.store.pause(m.tenantId,m.chatId,false);body='已恢复新消息投递。';}
         if(command==='new')body=selectionPending?'项目或任务仍在切换，请等结果后再新建。':this.mode==='desktop-test'?queueCreation(this.store,received.id,m,now):'收件测试模式暂不创建任务。';
         if(command==='current')body=`当前任务：「${taskTitle(this.store,b.target_id)}」` ;
-        if(command==='help')body='/rc projects 项目列表\n/rc project 编号 选择项目\n/rc project 0 返回全局\n/rc new 名称 在所选项目新建（未选则独立任务）\n/rc tasks 当前范围的会话（全局仅独立会话）\n/rc use 2 切换任务\n/rc current 当前任务\n/rc status 状态\n/rc usage 剩余用量\n/rc pause 暂停\n/rc resume 恢复\n可先发送图片或文件（单个20 MB以内），再发送处理要求。\n普通消息原样投递；停止和截图未启用。';
+        if(command==='help')body='/rc projects 项目列表\n/rc project 编号 选择项目\n/rc project 0 返回全局\n/rc new 名称 在所选项目新建（未选则独立任务）\n/rc tasks 当前范围的会话（全局仅独立会话）\n/rc task 2 切换任务\n/rc current 当前任务\n/rc status 状态\n/rc usage 剩余用量\n/rc pause 暂停\n/rc resume 恢复\n可先发送图片或文件（单个20 MB以内），再发送处理要求。\n普通消息原样投递；停止和截图未启用。';
         if(command==='usage'){this.store.db.prepare('INSERT INTO usage_requests(inbox_id) VALUES(?)').run(received.id);body='正在查询当前账户剩余用量。';}
         if(command==='pause')this.store.pause(m.tenantId,m.chatId,true);
       }

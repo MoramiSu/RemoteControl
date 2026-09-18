@@ -19,8 +19,9 @@ export function classify(text) {
   const cmd=text.slice(4);
   if(cmd==='project' || cmd.startsWith('project '))return 'project';
   if(cmd==='new' || cmd.startsWith('new '))return 'new';
-  if(cmd==='use' || cmd.startsWith('use '))return 'use';
-  return ['projects','usage','status','pause','resume','stop','screenshot','tasks','use','current','help'].includes(cmd) ? cmd : 'unknown_command';
+  // Keep the persisted operation name for pending commands from older versions.
+  if(cmd==='task' || cmd.startsWith('task '))return 'use';
+  return ['projects','usage','status','pause','resume','stop','screenshot','tasks','current','help'].includes(cmd) ? cmd : 'unknown_command';
 }
 
 

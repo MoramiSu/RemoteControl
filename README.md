@@ -38,7 +38,7 @@ RemoteControl 将飞书私聊接入已有的 Codex 桌面任务。任务执行�
 你 → /rc projects        查看桌面中的项目
 你 → /rc project 2       进入列表里的第 2 个项目
 你 → /rc tasks           查看该项目的会话
-你 → /rc use 1           绑定列表里的第 1 个会话
+你 → /rc task 1           绑定列表里的第 1 个会话
 
 你 → 接着刚才的方案，把安装步骤简化，再更新 README。
      ↓
@@ -127,7 +127,7 @@ powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\install-star
 | `/rc project 编号` | 选择项目 |
 | `/rc project 0` | 退出项目，回到全局 |
 | `/rc tasks` | 全局仅列独立会话；项目下仅列项目内会话 |
-| `/rc use 编号` | 按最新任务列表核验并切换 |
+| `/rc task 编号` | 按最新任务列表核验并切换 |
 | `/rc new 名称` | 当前项目中新建会话；全局下新建独立会话 |
 | `/rc current` | 当前范围和绑定会话 |
 | `/rc status` | 连接、执行及队列状态 |

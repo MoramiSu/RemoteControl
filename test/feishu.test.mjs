@@ -23,3 +23,5 @@ test('status reflects live runtime and persisted pause and queue without becomin
  assert.equal(s.accept(event('/rc status','m4'),1000).duplicate,true);
  assert.equal(s.store.pendingReplies().filter(r=>r.inbox_id===4).length,1);
 });
+
+test('task selects a session; retired use command cannot become task input',()=>{assert.equal(classify('/rc task 2'),'use');assert.equal(classify('/rc task'),'use');assert.equal(classify('/rc tasks'),'tasks');assert.equal(classify('/rc use 2'),'unknown_command');assert.equal(classify('/rc use'),'unknown_command');assert.equal(classify('task 2'),'text')});

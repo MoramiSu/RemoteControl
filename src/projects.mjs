@@ -37,9 +37,9 @@ export class ProjectWorker{
     const scope=current?'project':'global';
     const list=await this.client.call('list_threads',{limit:50});unchanged();
     const rows=[...new Map([...(list.pinnedThreads??[]),...(list.threads??[])].filter(t=>t.kind==='codex'&&t.hostId==='local'&&(scope==='global'?t.projectId==null:t.projectId===current.projectId)).map(t=>[t.id,{id:t.id,title:t.title,projectId:t.projectId??null,scope}])).values()];save('tasks',rows);
-    body=(scope==='global'?'全局独立会话：\n':`项目「${current.label}」任务：\n`)+(rows.length?rows.map((t,i)=>`${i+1}. ${t.title}`).join('\n')+'\n/rc use 编号 切换；以最新列表为准，有效 5 分钟。':'暂无列出的任务，可用 /rc new 名称 新建。')+'\n包含置顶任务及最近 50 条中的本机 Codex 会话；较旧任务可先在桌面打开。';
+    body=(scope==='global'?'全局独立会话：\n':`项目「${current.label}」任务：\n`)+(rows.length?rows.map((t,i)=>`${i+1}. ${t.title}`).join('\n')+'\n/rc task 编号 切换；以最新列表为准，有效 5 分钟。':'暂无列出的任务，可用 /rc new 名称 新建。')+'\n包含置顶任务及最近 50 条中的本机 Codex 会话；较旧任务可先在桌面打开。';
    }else if(row.command==='use'){
-    const m=/^\/rc use ([1-9][0-9]*)$/.exec(row.original_text);if(!m)throw Error('请先 /rc tasks，再 /rc use 编号。');const choice=pick('tasks',Number(m[1]));if(current?choice.scope!=='project'||choice.projectId!==current.projectId:choice.scope!=='global'||choice.projectId!=null)throw Error('项目已变化，请重新列出任务。');
+    const m=/^\/rc (?:task|use) ([1-9][0-9]*)$/.exec(row.original_text);if(!m)throw Error('请先 /rc tasks，再 /rc task 编号。');const choice=pick('tasks',Number(m[1]));if(current?choice.scope!=='project'||choice.projectId!==current.projectId:choice.scope!=='global'||choice.projectId!=null)throw Error('项目已变化，请重新列出任务。');
     const catalog=await this.client.call('list_threads',{limit:50});const live=[...(catalog.pinnedThreads??[]),...(catalog.threads??[])].find(t=>t.id===choice.id&&t.kind==='codex'&&t.hostId==='local'&&(t.projectId??null)===(choice.projectId??null)&&t.title===choice.title);if(!live)throw Error('任务归属无法核验，请重新列出任务。');
     let destination=null;if(choice.projectId){destination=localProjects(await this.client.call('list_projects',{})).find(p=>p.projectId===choice.projectId);if(!destination)throw Error('项目无法核验，未切换。');}
     const page=await this.client.call('read_thread',{threadId:choice.id,turnLimit:1,includeOutputs:false});unchanged();if(page.thread?.id!==choice.id||page.thread.title!==choice.title||page.thread.kind!=='codex'||page.thread.hostId!=='local')throw Error('任务身份无法核验，未切换。');
@@ -51,6 +51,7 @@ export class ProjectWorker{
   this.store.transaction(()=>{db.prepare('INSERT OR IGNORE INTO outbox(inbox_id,dedup_key,body) VALUES(?,?,?)').run(row.inbox_id,`project:${row.inbox_id}`,body??'操作未执行。');db.prepare('UPDATE project_commands SET done=1 WHERE inbox_id=?').run(row.inbox_id);});
  }
 }
+
 
 
 
